@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FarmVision — Pre-Crop Intelligence Map</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=DM+Mono:wght@400;500&family=Sora:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --soil: #2d1f0e;
+    --earth: #4a3020;
+    --clay: #8b6340;
+    --straw: #d4a853;
+    --wheat: #e8c87a;
+    --leaf: #3d6b2e;
+    --sprout: #5a9c40;
+    --lime: #8fc93a;
+    --sky: #8ab4d4;
+    --water: #3a7abd;
+    --danger: #c94040;
+    --warn: #d4873a;
+    --safe: #4a9c5a;
+    --bg: #0f0a05;
+    --panel: #1a1108;
+    --card: #221608;
+    --border: #3a2510;
+    --text: #e8d8b0;
+    --muted: #8a7050;
+    --accent: #d4a853;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Sora', sans-serif;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Grain texture overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 1000;
+    opacity: 0.6;
+  }
+
+  header {
+    padding: 24px 40px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: rgba(15,10,5,0.8);
+    backdrop-filter: blur(10px);
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    width: 36px;
+    height: 36px;
+    background: linear-gradient(135deg, var(--leaf), var(--lime));
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+  }
+
+  .logo-text {
+    font-family: 'Instrument Serif', serif;
+    font-size: 22px;
+    color: var(--wheat);
+    letter-spacing: -0.5px;
+  }
+
+  .logo-sub {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .header-right {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--lime);
+    box-shadow: 0 0 8px var(--lime);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .main {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 0;
+    min-height: calc(100vh - 73px);
+  }
+
+  /* LEFT PANEL */
+  .sidebar {
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    padding: 28px 24px;
+    overflow-y: auto;
+  }
+
+  .section-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .input-group {
+    margin-bottom: 18px;
+  }
+
+  label {
+    display: block;
+    font-size: 12px;
+    color: var(--clay);
+    margin-bottom: 6px;
+    font-family: 'DM Mono', monospace;
+    letter-spacing: 0.5px;
+  }
+
+  select, input[type="range"] {
+    width: 100%;
+    background: var(--card);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-family: 'Sora', sans-serif;
+    font-size: 13px;
+    outline: none;
+    cursor: pointer;
+    appearance: none;
+    transition: border-color 0.2s;
+  }
+
+  select:focus, select:hover {
+    border-color: var(--straw);
+  }
+
+  select option { background: #1a1108; }
+
+  input[type="range"] {
+    padding: 4px 0;
+    height: 20px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+  }
+
+  input[type="range"]::-webkit-slider-track {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: var(--straw);
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 0 8px rgba(212,168,83,0.4);
+  }
+
+  .range-display {
+    text-align: right;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--straw);
+    margin-top: 4px;
+  }
+
+  .mode-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 24px;
+  }
+
+  .mode-btn {
+    padding: 10px 8px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+    line-height: 1.4;
+  }
+
+  .mode-btn .icon { font-size: 18px; display: block; margin-bottom: 4px; }
+
+  .mode-btn:hover { border-color: var(--straw); color: var(--wheat); }
+  .mode-btn.active {
+    border-color: var(--straw);
+    background: rgba(212,168,83,0.12);
+    color: var(--wheat);
+    box-shadow: 0 0 16px rgba(212,168,83,0.1);
+  }
+
+  .generate-btn {
+    width: 100%;
+    padding: 14px;
+    background: linear-gradient(135deg, var(--leaf), var(--sprout));
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-family: 'Sora', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.25s;
+    margin-bottom: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .generate-btn::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, transparent, rgba(255,255,255,0.1));
+  }
+
+  .generate-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px rgba(90,156,64,0.35);
+  }
+
+  .generate-btn:active { transform: translateY(0); }
+
+  .stats-mini {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-top: 20px;
+  }
+
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    text-align: center;
+  }
+
+  .stat-value {
+    font-family: 'Instrument Serif', serif;
+    font-size: 24px;
+    color: var(--wheat);
+    display: block;
+  }
+
+  .stat-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 2px;
+    display: block;
+  }
+
+  .legend {
+    margin-top: 20px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+  }
+
+  .legend-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 10px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 12px;
+    color: var(--clay);
+  }
+
+  .legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+
+  /* RIGHT PANEL */
+  .viz-area {
+    padding: 28px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  .viz-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .viz-title {
+    font-family: 'Instrument Serif', serif;
+    font-size: 28px;
+    color: var(--wheat);
+    line-height: 1;
+  }
+
+  .viz-title span {
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    color: var(--straw);
+  }
+
+  .viz-meta {
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    text-align: right;
+  }
+
+  /* GRID CANVAS */
+  .grid-container {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .grid-container::before {
+    content: '';
+    position: absolute;
+    top: -30%;
+    right: -10%;
+    width: 300px;
+    height: 300px;
+    background: radial-gradient(circle, rgba(90,156,64,0.05) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .farm-label-top {
+    display: flex;
+    justify-content: space-between;
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    margin-bottom: 8px;
+    padding: 0 2px;
+  }
+
+  .farm-grid-wrapper {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+  }
+
+  .axis-left {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+    padding: 2px 0;
+    width: 20px;
+  }
+
+  #farmGrid {
+    flex: 1;
+    display: grid;
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    cursor: crosshair;
+  }
+
+  .cell {
+    position: relative;
+    transition: all 0.4s ease;
+    cursor: pointer;
+  }
+
+  .cell:hover {
+    z-index: 10;
+    transform: scale(1.15);
+    outline: 2px solid rgba(255,255,255,0.5);
+  }
+
+  /* Tooltip */
+  #tooltip {
+    position: fixed;
+    background: rgba(15,10,5,0.95);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-family: 'DM Mono', monospace;
+    font-size: 11px;
+    color: var(--text);
+    pointer-events: none;
+    z-index: 999;
+    display: none;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    line-height: 1.8;
+    min-width: 160px;
+  }
+
+  #tooltip .tip-title {
+    font-size: 12px;
+    color: var(--wheat);
+    font-weight: 600;
+    margin-bottom: 6px;
+    font-family: 'Sora', sans-serif;
+  }
+
+  .tip-row { display: flex; justify-content: space-between; gap: 16px; }
+  .tip-key { color: var(--muted); }
+  .tip-val { color: var(--straw); }
+
+  /* Bottom info strip */
+  .insight-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+  }
+
+  .insight-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .insight-card:hover { border-color: var(--straw); }
+
+  .insight-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    border-radius: 10px 10px 0 0;
+  }
+
+  .insight-card.healthy::before { background: var(--safe); }
+  .insight-card.water::before { background: var(--water); }
+  .insight-card.pest::before { background: var(--danger); }
+  .insight-card.yield::before { background: var(--straw); }
+
+  .insight-icon { font-size: 22px; margin-bottom: 8px; }
+
+  .insight-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--muted);
+    margin-bottom: 4px;
+  }
+
+  .insight-value {
+    font-family: 'Instrument Serif', serif;
+    font-size: 28px;
+    color: var(--wheat);
+    line-height: 1;
+  }
+
+  .insight-desc {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+
+  /* Recommendation block */
+  .rec-block {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--straw);
+    border-radius: 0 10px 10px 0;
+    padding: 16px 20px;
+  }
+
+  .rec-title {
+    font-family: 'DM Mono', monospace;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--straw);
+    margin-bottom: 10px;
+  }
+
+  .rec-items {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .rec-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--clay);
+    background: rgba(212,168,83,0.06);
+    border: 1px solid rgba(212,168,83,0.15);
+    padding: 6px 12px;
+    border-radius: 20px;
+  }
+
+  .rec-dot { width: 6px; height: 6px; border-radius: 50%; }
+
+  /* Animation */
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .animated { animation: fadeIn 0.4s ease forwards; }
+
+  /* Loading shimmer */
+  @keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
+  .loading-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(212,168,83,0.05) 50%, transparent 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1s ease-in-out;
+    pointer-events: none;
+    border-radius: 12px;
+    display: none;
+  }
+
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--panel); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<div id="tooltip">
+  <div class="tip-title" id="tipTitle">Zone A1</div>
+  <div class="tip-row"><span class="tip-key">Risk Score</span><span class="tip-val" id="tipRisk">—</span></div>
+  <div class="tip-row"><span class="tip-key">Moisture</span><span class="tip-val" id="tipMoisture">—</span></div>
+  <div class="tip-row"><span class="tip-key">Pest Level</span><span class="tip-val" id="tipPest">—</span></div>
+  <div class="tip-row"><span class="tip-key">Est. Yield</span><span class="tip-val" id="tipYield">—</span></div>
+  <div class="tip-row"><span class="tip-key">Status</span><span class="tip-val" id="tipStatus">—</span></div>
+</div>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🌾</div>
+    <div>
+      <div class="logo-text">FarmVision</div>
+      <div class="logo-sub">Pre-Crop Intelligence</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="status-dot"></div>
+    SIMULATION ACTIVE &nbsp;|&nbsp; Grid 20×20 &nbsp;|&nbsp; <span id="headerCrop">Rice</span>
+  </div>
+</header>
+
+<div class="main">
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <div class="section-label">Farm Parameters</div>
+
+    <div class="input-group">
+      <label>CROP TYPE</label>
+      <select id="cropType" onchange="updateSim()">
+        <option value="rice">🌾 Rice</option>
+        <option value="wheat">🌿 Wheat</option>
+        <option value="cotton">🤍 Cotton</option>
+        <option value="sugarcane">🎋 Sugarcane</option>
+        <option value="maize">🌽 Maize</option>
+        <option value="groundnut">🥜 Groundnut</option>
+      </select>
+    </div>
+
+    <div class="input-group">
+      <label>SOIL TYPE</label>
+      <select id="soilType" onchange="updateSim()">
+        <option value="clay">Clay Soil</option>
+        <option value="loam">Loam Soil</option>
+        <option value="sandy">Sandy Soil</option>
+        <option value="black">Black Cotton Soil</option>
+        <option value="red">Red Laterite Soil</option>
+      </select>
+    </div>
+
+    <div class="input-group">
+      <label>HUMIDITY — <span id="humidVal">65</span>%</label>
+      <input type="range" id="humidity" min="20" max="100" value="65" oninput="document.getElementById('humidVal').textContent=this.value; updateSim()">
+    </div>
+
+    <div class="input-group">
+      <label>TEMPERATURE — <span id="tempVal">28</span>°C</label>
+      <input type="range" id="temperature" min="15" max="45" value="28" oninput="document.getElementById('tempVal').textContent=this.value; updateSim()">
+    </div>
+
+    <div class="input-group">
+      <label>RAINFALL — <span id="rainVal">Medium</span></label>
+      <input type="range" id="rainfall" min="1" max="3" value="2" step="1"
+        oninput="document.getElementById('rainVal').textContent=['','Low','Medium','High'][this.value]; updateSim()">
+    </div>
+
+    <div class="section-label" style="margin-top:24px;">Visualization Mode</div>
+
+    <div class="mode-grid">
+      <button class="mode-btn active" onclick="setMode('risk')" id="btn-risk">
+        <span class="icon">🌡️</span>Overall Risk
+      </button>
+      <button class="mode-btn" onclick="setMode('pest')" id="btn-pest">
+        <span class="icon">🐛</span>Pest Risk
+      </button>
+      <button class="mode-btn" onclick="setMode('water')" id="btn-water">
+        <span class="icon">💧</span>Water Need
+      </button>
+      <button class="mode-btn" onclick="setMode('yield')" id="btn-yield">
+        <span class="icon">📊</span>Yield Zones
+      </button>
+    </div>
+
+    <button class="generate-btn" onclick="regenerate()">
+      ✦ Generate New Simulation
+    </button>
+
+    <div class="section-label">Summary</div>
+    <div class="stats-mini">
+      <div class="stat-card">
+        <span class="stat-value" id="safePct">—</span>
+        <span class="stat-label">Safe Zones</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-value" id="riskPct">—</span>
+        <span class="stat-label">Risk Zones</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-value" id="avgYield">—</span>
+        <span class="stat-label">Avg Yield</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-value" id="waterScore">—</span>
+        <span class="stat-label">Water Index</span>
+      </div>
+    </div>
+
+    <div class="legend" id="legendBox">
+      <div class="legend-title">Legend</div>
+      <div id="legendItems"></div>
+    </div>
+  </div>
+
+  <!-- VIZ AREA -->
+  <div class="viz-area">
+    <div class="viz-header">
+      <div>
+        <div class="viz-title">Farm <span id="vizCropName">Rice</span> Preview</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:4px;font-family:'DM Mono',monospace;">
+          1 Acre · 20×20 Grid · 400 Zones Analyzed
+        </div>
+      </div>
+      <div class="viz-meta">
+        <div>Mode: <span id="modeName" style="color:var(--straw)">Overall Risk</span></div>
+        <div style="margin-top:4px;" id="simTime">—</div>
+      </div>
+    </div>
+
+    <!-- MAIN GRID -->
+    <div class="grid-container">
+      <div class="loading-overlay" id="loadingOverlay"></div>
+      <div class="farm-label-top">
+        <span>← WEST</span>
+        <span>NORTH ↑</span>
+        <span>EAST →</span>
+      </div>
+      <div class="farm-grid-wrapper">
+        <div class="axis-left" id="axisLeft"></div>
+        <div id="farmGrid"></div>
+      </div>
+    </div>
+
+    <!-- INSIGHT CARDS -->
+    <div class="insight-strip">
+      <div class="insight-card healthy">
+        <div class="insight-icon">🟢</div>
+        <div class="insight-label">Healthy Zones</div>
+        <div class="insight-value" id="insightHealthy">—</div>
+        <div class="insight-desc" id="insightHealthyDesc">Safe for planting</div>
+      </div>
+      <div class="insight-card water">
+        <div class="insight-icon">💧</div>
+        <div class="insight-label">High Water Need</div>
+        <div class="insight-value" id="insightWater">—</div>
+        <div class="insight-desc" id="insightWaterDesc">Zones needing irrigation</div>
+      </div>
+      <div class="insight-card pest">
+        <div class="insight-icon">🐛</div>
+        <div class="insight-label">Pest Alert</div>
+        <div class="insight-value" id="insightPest">—</div>
+        <div class="insight-desc" id="insightPestDesc">High risk cells</div>
+      </div>
+      <div class="insight-card yield">
+        <div class="insight-icon">📈</div>
+        <div class="insight-label">Peak Yield</div>
+        <div class="insight-value" id="insightYield">—</div>
+        <div class="insight-desc" id="insightYieldDesc">Optimal production zones</div>
+      </div>
+    </div>
+
+    <!-- RECOMMENDATIONS -->
+    <div class="rec-block">
+      <div class="rec-title">⚡ AI Recommendations</div>
+      <div class="rec-items" id="recItems"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const GRID = 20;
+let farmData = [];
+let currentMode = 'risk';
+let currentCrop = 'rice';
+
+// Crop-specific parameters
+const cropParams = {
+  rice:      { pestSensitivity: 0.7, waterNeed: 0.8, heatTolerance: 0.5, name: 'Rice' },
+  wheat:     { pestSensitivity: 0.5, waterNeed: 0.5, heatTolerance: 0.6, name: 'Wheat' },
+  cotton:    { pestSensitivity: 0.9, waterNeed: 0.6, heatTolerance: 0.7, name: 'Cotton' },
+  sugarcane: { pestSensitivity: 0.4, waterNeed: 0.9, heatTolerance: 0.6, name: 'Sugarcane' },
+  maize:     { pestSensitivity: 0.5, waterNeed: 0.6, heatTolerance: 0.7, name: 'Maize' },
+  groundnut: { pestSensitivity: 0.3, waterNeed: 0.4, heatTolerance: 0.8, name: 'Groundnut' },
+};
+
+const soilParams = {
+  clay:      { moisture: 0.8, nutrient: 0.7 },
+  loam:      { moisture: 0.6, nutrient: 0.9 },
+  sandy:     { moisture: 0.3, nutrient: 0.4 },
+  black:     { moisture: 0.7, nutrient: 0.8 },
+  red:       { moisture: 0.4, nutrient: 0.5 },
+};
+
+function noise(x, y, seed) {
+  const s = Math.sin(x * 12.9898 + y * 78.233 + seed) * 43758.5453;
+  return s - Math.floor(s);
+}
+
+function smoothNoise(x, y, seed) {
+  let v = 0;
+  v += noise(x, y, seed) * 0.5;
+  v += noise(x * 2, y * 2, seed + 1) * 0.25;
+  v += noise(x * 4, y * 4, seed + 2) * 0.125;
+  v += noise(x * 8, y * 8, seed + 3) * 0.0625;
+  return v / 0.9375;
+}
+
+function generateFarm() {
+  const crop = document.getElementById('cropType').value;
+  const soil = document.getElementById('soilType').value;
+  const humidity = document.getElementById('humidity').value / 100;
+  const temp = (document.getElementById('temperature').value - 15) / 30;
+  const rainfall = (document.getElementById('rainfall').value - 1) / 2;
+
+  const cp = cropParams[crop];
+  const sp = soilParams[soil];
+
+  // Use fixed seed for consistent terrain layout
+  if (!window.farmSeed) {
+    window.farmSeed = Math.random() * 100;
+  }
+  const seed = window.farmSeed;
+
+  farmData = [];
+
+  for (let r = 0; r < GRID; r++) {
+    farmData[r] = [];
+    for (let c = 0; c < GRID; c++) {
+      const nx = c / GRID, ny = r / GRID;
+
+      // Base terrain variation (consistent across parameter changes)
+      const terrain = smoothNoise(nx, ny, seed);
+
+      // Moisture gradient (more realistic — higher near center-south)
+      const distCenter = Math.sqrt((nx-0.5)**2 + (ny-0.7)**2);
+      const moistureBase = sp.moisture * (1 - distCenter * 0.6) + rainfall * 0.4;
+      const moisture = Math.max(0.1, Math.min(1, moistureBase + (terrain - 0.5) * 0.3));
+
+      // Temperature variation (NW corner hotter)
+      const tempVar = temp * 0.6 + (1 - nx) * 0.2 + ny * 0.1 + noise(nx * 5, ny * 5, seed + 10) * 0.1;
+
+      // Pest risk: high humidity + high temp + crop sensitivity
+      const pestRisk = Math.min(1,
+        humidity * 0.35 * cp.pestSensitivity +
+        tempVar * 0.25 +
+        (1 - sp.nutrient) * 0.2 +
+        smoothNoise(nx * 1.5, ny * 1.5, seed + 20) * 0.3 * cp.pestSensitivity
+      );
+
+      // Water need
+      const waterNeed = Math.min(1,
+        cp.waterNeed * (1 - moisture) * 0.6 +
+        tempVar * 0.25 +
+        smoothNoise(nx * 2, ny * 2, seed + 30) * 0.15
+      );
+
+      // Overall risk (composite)
+      const riskScore = Math.min(1,
+        pestRisk * 0.4 +
+        waterNeed * 0.3 +
+        tempVar * (1 - cp.heatTolerance) * 0.2 +
+        (1 - sp.nutrient) * 0.1
+      );
+
+      // Yield potential (inverse of risk, boosted by good soil+moisture)
+      const yieldPotential = Math.max(0, 1 - riskScore * 0.7 + sp.nutrient * 0.15 + moisture * 0.1 * (1 - tempVar));
+
+      farmData[r][c] = { riskScore, pestRisk, waterNeed, moisture, tempVar, yieldPotential, row: r, col: c };
+    }
+  }
+
+  renderGrid();
+  updateStats();
+  updateRecommendations();
+}
+
+function getRiskColor(val, mode) {
+  if (mode === 'risk') {
+    if (val < 0.25) return `hsl(120, ${50 + val*80}%, ${25 + val*15}%)`;
+    if (val < 0.5)  return `hsl(${120 - (val-0.25)*320}%, 65%, 35%)`;
+    if (val < 0.75) return `hsl(${30 - (val-0.5)*40}, 75%, 40%)`;
+    return `hsl(${5 + (1-val)*10}, 80%, ${35 - val*10}%)`;
+  }
+  if (mode === 'pest') {
+    if (val < 0.3) return `rgba(60,160,70,${0.4+val*1.5})`;
+    if (val < 0.6) return `rgba(210,140,30,${0.5+val})`;
+    return `rgba(200,50,50,${0.5+val*0.5})`;
+  }
+  if (mode === 'water') {
+    const b = Math.round(80 + val * 120);
+    const g = Math.round(60 + val * 60);
+    return `rgb(20,${g},${b})`;
+  }
+  if (mode === 'yield') {
+    if (val > 0.75) return `rgba(80,180,60,${0.5+val*0.5})`;
+    if (val > 0.5)  return `rgba(160,200,60,${0.4+val})`;
+    if (val > 0.25) return `rgba(200,160,40,0.7)`;
+    return `rgba(160,60,60,0.7)`;
+  }
+}
+
+function renderGrid() {
+  const grid = document.getElementById('farmGrid');
+  const cellSize = Math.floor(Math.min(window.innerWidth * 0.5, 700) / GRID);
+  grid.style.gridTemplateColumns = `repeat(${GRID}, 1fr)`;
+  grid.style.width = '100%';
+  grid.style.aspectRatio = '1';
+
+  // Build axis
+  const axis = document.getElementById('axisLeft');
+  axis.innerHTML = '';
+  ['S', '', '', '', '', '', '', '', '', 'N'].forEach(l => {
+    const d = document.createElement('div');
+    d.textContent = l;
+    axis.appendChild(d);
+  });
+
+  grid.innerHTML = '';
+
+  farmData.forEach((row, r) => {
+    row.forEach((cell, c) => {
+      const val = getVal(cell, currentMode);
+      const div = document.createElement('div');
+      div.className = 'cell';
+      div.style.background = getRiskColor(val, currentMode);
+      div.style.aspectRatio = '1';
+      div.setAttribute('data-r', r);
+      div.setAttribute('data-c', c);
+      div.addEventListener('mousemove', showTooltip);
+      div.addEventListener('mouseleave', hideTooltip);
+      grid.appendChild(div);
+    });
+  });
+}
+
+function getVal(cell, mode) {
+  if (mode === 'risk')  return cell.riskScore;
+  if (mode === 'pest')  return cell.pestRisk;
+  if (mode === 'water') return cell.waterNeed;
+  if (mode === 'yield') return cell.yieldPotential;
+  return 0;
+}
+
+function showTooltip(e) {
+  const r = parseInt(this.getAttribute('data-r'));
+  const c = parseInt(this.getAttribute('data-c'));
+  const cell = farmData[r][c];
+  const cols = 'ABCDEFGHIJKLMNOPQRST';
+
+  document.getElementById('tipTitle').textContent = `Zone ${cols[c]}${r+1}`;
+  document.getElementById('tipRisk').textContent = (cell.riskScore * 100).toFixed(0) + '%';
+  document.getElementById('tipMoisture').textContent = (cell.moisture * 100).toFixed(0) + '%';
+  document.getElementById('tipPest').textContent = (cell.pestRisk * 100).toFixed(0) + '%';
+  document.getElementById('tipYield').textContent = (cell.yieldPotential * 100).toFixed(0) + '%';
+  const st = cell.riskScore < 0.3 ? '✅ Safe' : cell.riskScore < 0.6 ? '⚠️ Moderate' : '🔴 High Risk';
+  document.getElementById('tipStatus').textContent = st;
+
+  const tip = document.getElementById('tooltip');
+  tip.style.display = 'block';
+  tip.style.left = (e.clientX + 16) + 'px';
+  tip.style.top  = (e.clientY - 10) + 'px';
+}
+
+function hideTooltip() {
+  document.getElementById('tooltip').style.display = 'none';
+}
+
+function updateStats() {
+  let safe = 0, risk = 0, totalYield = 0, totalWater = 0;
+  const total = GRID * GRID;
+
+  farmData.forEach(row => row.forEach(cell => {
+    if (cell.riskScore < 0.4) safe++;
+    if (cell.riskScore >= 0.6) risk++;
+    totalYield += cell.yieldPotential;
+    totalWater += cell.waterNeed;
+  }));
+
+  document.getElementById('safePct').textContent = Math.round(safe/total*100) + '%';
+  document.getElementById('riskPct').textContent = Math.round(risk/total*100) + '%';
+  document.getElementById('avgYield').textContent = Math.round(totalYield/total*100) + '%';
+  document.getElementById('waterScore').textContent = (totalWater/total).toFixed(2);
+
+  // Insight cards
+  let highPest = 0, highWater = 0, highYield = 0;
+  farmData.forEach(row => row.forEach(cell => {
+    if (cell.pestRisk > 0.6) highPest++;
+    if (cell.waterNeed > 0.6) highWater++;
+    if (cell.yieldPotential > 0.7) highYield++;
+  }));
+
+  document.getElementById('insightHealthy').textContent = Math.round(safe/total*100) + '%';
+  document.getElementById('insightWater').textContent = highWater + ' zones';
+  document.getElementById('insightPest').textContent = highPest + ' zones';
+  document.getElementById('insightYield').textContent = Math.round(highYield/total*100) + '%';
+
+  document.getElementById('simTime').textContent = new Date().toLocaleTimeString();
+}
+
+function updateRecommendations() {
+  const crop = document.getElementById('cropType').value;
+  const cp = cropParams[crop];
+  const humidity = document.getElementById('humidity').value;
+  const rainfall = document.getElementById('rainfall').value;
+
+  const recs = [];
+
+  let pestZones = 0;
+  farmData.forEach(row => row.forEach(c => { if (c.pestRisk > 0.6) pestZones++; }));
+
+  if (pestZones > 50) recs.push({ dot: '#c94040', text: `Apply pesticide in ${pestZones} high-risk zones` });
+  if (rainfall == 1)  recs.push({ dot: '#3a7abd', text: 'Low rainfall — Irrigation recommended' });
+  if (humidity > 80)  recs.push({ dot: '#d4873a', text: 'High humidity — Monitor fungal disease' });
+  if (cp.waterNeed > 0.7) recs.push({ dot: '#4a9c5a', text: `${cp.name} needs consistent moisture` });
+  recs.push({ dot: '#5a9c40', text: 'Green zones optimal for planting now' });
+  recs.push({ dot: '#8ab4d4', text: 'Pre-till northern sector — higher soil quality' });
+
+  const container = document.getElementById('recItems');
+  container.innerHTML = recs.map(r =>
+    `<div class="rec-item"><div class="rec-dot" style="background:${r.dot}"></div>${r.text}</div>`
+  ).join('');
+}
+
+function updateLegend() {
+  const legends = {
+    risk:  [['#2d6b2e','Low Risk (0–25%)'],['#c8a830','Moderate (25–50%)'],['#c8540a','High (50–75%)'],['#8b1010','Very High (75–100%)']],
+    pest:  [['#3ca046','Safe'],['#d48c1e','Watch'],['#c83232','High Pest Risk']],
+    water: [['#203060','Low Need'],['#1450a0','Medium'],['#28a0e8','High Need']],
+    yield: [['#3cb43c','Peak Yield'],['#a0c83c','Good Yield'],['#c8a028','Low Yield'],['#a03c3c','Poor Yield']],
+  };
+  const items = legends[currentMode];
+  document.getElementById('legendItems').innerHTML = items.map(([color, label]) =>
+    `<div class="legend-item"><div class="legend-dot" style="background:${color}"></div>${label}</div>`
+  ).join('');
+}
+
+function setMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn-' + mode).classList.add('active');
+  const names = { risk:'Overall Risk', pest:'Pest Risk Map', water:'Water Need Map', yield:'Yield Zones' };
+  document.getElementById('modeName').textContent = names[mode];
+  updateLegend();
+  renderGrid();
+}
+
+function updateSim() {
+  const crop = document.getElementById('cropType').value;
+  document.getElementById('headerCrop').textContent = cropParams[crop].name;
+  document.getElementById('vizCropName').textContent = cropParams[crop].name;
+  generateFarm();
+}
+
+function regenerate() {
+  const ol = document.getElementById('loadingOverlay');
+  ol.style.display = 'block';
+  setTimeout(() => { ol.style.display = 'none'; }, 800);
+  generateFarm();
+}
+
+// Init
+updateLegend();
+generateFarm();
+</script>
+</body>
+</html>
