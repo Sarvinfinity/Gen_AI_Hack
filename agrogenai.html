@@ -1,0 +1,1790 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#ff7a18">
+<title>agrogen.ai — Digital Twin Simulator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.26.0/plotly.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;900&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Inter:wght@300;400;500&display=swap');
+
+  :root {
+    /* Bioluminescent Night theme */
+    --bg: radial-gradient(1200px 800px at 10% 10%, rgba(10,18,34,0.6), rgba(3,6,12,1) 40%), linear-gradient(180deg,#02040a 0%, #061124 100%);
+    --page-bg-color: #030617;
+    --panel: rgba(8,12,20,0.34);
+    --border: rgba(140,180,255,0.06);
+    --accent: #00ffd5; /* neon cyan */
+    --accent2: #7b5cff; /* biolume violet */
+    --accent3: #48ffe2; /* soft aqua */
+    --warn: #ff6b9a;
+    --text: #e8f7ff;
+    --muted: #86a4bf;
+    --glass-blur: 14px;
+    --glass-alpha: 0.08;
+    --glow: 0 24px 80px rgba(123,92,255,0.12);
+    --glow2: 0 20px 60px rgba(0,255,213,0.08);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Plus Jakarta Sans', Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    min-height: 100vh;
+    overflow-x: hidden;
+    -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
+  }
+
+  /* ANIMATED GRID BG */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    /* soft biolume particles + subtle nebula */
+    background-image:
+      radial-gradient(circle at 20% 20%, rgba(123,92,255,0.06) 0%, transparent 12%),
+      radial-gradient(circle at 80% 70%, rgba(0,255,213,0.04) 0%, transparent 14%),
+      radial-gradient(circle at 50% 40%, rgba(120,220,255,0.02) 0%, transparent 22%),
+      linear-gradient(160deg, rgba(10,18,34,0.0), rgba(2,6,12,0.2));
+    background-blend-mode: screen;
+    animation: nebulaFloat 24s linear infinite, starTwinkle 6s linear infinite;
+  }
+
+  @keyframes nebulaFloat{
+    0%{background-position:0% 0%,100% 100%,0% 0%,0 0}
+    50%{background-position:8% 3%,92% 97%,10% 20%,30% 40%}
+    100%{background-position:0% 0%,100% 100%,0% 0%,0 0}
+  }
+
+  @keyframes starTwinkle{
+    0%,100%{filter:brightness(1)}
+    50%{filter:brightness(1.08)}
+  }
+
+  @keyframes sunPulse{
+    0%{filter:brightness(1) saturate(1) opacity(0.92); transform:translateZ(0)}
+    50%{filter:brightness(1.06) saturate(1.06) opacity(1);}
+    100%{filter:brightness(1) saturate(1) opacity(0.92)}
+  }
+
+  @keyframes gridMove{
+    0%{background-position:0% 0%, 100% 100%, 0 0}
+    50%{background-position:10% 5%, 90% 95%, 100% 20%}
+    100%{background-position:0% 0%, 100% 100%, 0 0}
+  }
+
+  /* live indicators */
+  .live-dot{width:8px;height:8px;background:var(--accent);border-radius:50%;box-shadow:0 0 10px rgba(123,92,255,0.18);display:inline-block;vertical-align:middle}
+  .live-dot.pulse{animation:livePulse 1.6s ease-in-out infinite}
+  @keyframes livePulse{0%{transform:scale(1);opacity:1}50%{transform:scale(1.4);opacity:0.7}100%{transform:scale(1);opacity:1}}
+
+  .live-ticker{font-family:Space Mono,monospace;font-size:11px;padding:6px 10px;border-radius:999px;background:linear-gradient(90deg,rgba(123,92,255,0.06),rgba(0,255,213,0.04));border:1px solid rgba(123,92,255,0.06);color:var(--muted);display:flex;gap:8px;align-items:center}
+
+  .flash{animation:flashAnim 600ms ease forwards}
+  @keyframes flashAnim{0%{transform:translateY(-2px);opacity:0.6}60%{transform:translateY(0);opacity:1}100%{opacity:1}}
+
+  /* HEADER */
+  header {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 32px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(6,10,15,0.95);
+    backdrop-filter: blur(20px);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    width: 48px; height: 48px;
+    background: radial-gradient(60% 60% at 20% 20%, rgba(123,92,255,0.22), rgba(0,255,213,0.06));
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    box-shadow: 0 12px 40px rgba(123,92,255,0.12), 0 6px 18px rgba(0,255,213,0.06);
+    transition: transform .28s cubic-bezier(.2,.9,.3,1), box-shadow .2s;
+  }
+  .logo-icon:hover{ transform: translateY(-4px) rotate(-6deg) scale(1.06); box-shadow: 0 40px 120px rgba(123,92,255,0.18)}
+
+  .logo-text {
+    font-family: 'Orbitron', monospace;
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-shadow: 0 6px 24px rgba(123,92,255,0.08);
+  }
+
+  .logo-sub {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: var(--muted);
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-top: 2px;
+  }
+
+  .header-badges {
+    display: flex; gap: 8px; align-items: center;
+  }
+
+  .badge {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    letter-spacing: 1px;
+  }
+
+  .badge-live {
+    background: linear-gradient(90deg, rgba(0,255,213,0.06), rgba(123,92,255,0.04));
+    border: 1px solid rgba(123,92,255,0.14);
+    color: var(--accent);
+    display: flex; align-items: center; gap: 6px; padding:6px 12px;
+    box-shadow: 0 6px 26px rgba(123,92,255,0.04);
+  }
+
+  .badge-live::before {
+    content: '';
+    width: 6px; height: 6px;
+    background: var(--accent);
+    border-radius: 50%;
+    animation: pulse 1.5s infinite;
+    box-shadow: 0 6px 12px rgba(0,255,213,0.12);
+  }
+
+  /* onboarding + recommendation styles */
+  .onboard{position:fixed;right:22px;bottom:22px;z-index:400;max-width:360px;background:linear-gradient(180deg,rgba(255,255,255,0.02),transparent);backdrop-filter:blur(var(--glass-blur));border:1px solid var(--border);padding:14px;border-radius:12px;box-shadow:var(--glow2)}
+  .onboard h3{font-family:Orbitron,monospace;margin:0 0 6px 0}
+  .onboard p{font-family:Space Mono,monospace;color:var(--muted);font-size:13px;margin:0}
+  .recommend-card{background:linear-gradient(180deg,rgba(124,77,255,0.03),transparent);border:1px solid rgba(124,77,255,0.06);padding:10px;border-radius:8px}
+  .kbd{background:rgba(255,255,255,0.03);padding:2px 6px;border-radius:4px;border:1px solid var(--border);font-family:Space Mono,monospace;font-size:11px;color:var(--muted)}
+
+  .badge-ai {
+    background: rgba(123,92,255,0.06);
+    border: 1px solid rgba(123,92,255,0.14);
+    color: var(--accent2);
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.8); }
+  }
+
+  /* LAYOUT */
+  .main-layout {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: 280px 1fr 260px;
+    gap: 0;
+    height: calc(100vh - 64px);
+  }
+
+  /* SIDEBAR */
+  .sidebar {
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .sidebar::-webkit-scrollbar { width: 4px; }
+  .sidebar::-webkit-scrollbar-track { background: transparent; }
+  .sidebar::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  .section-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 8px;
+  }
+
+  .control-card {
+    background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.01));
+    border: 1px solid rgba(255,210,0,0.06);
+    border-radius: 10px;
+    padding: 14px;
+  }
+
+  .control-card-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--accent);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    display: flex; align-items: center; gap: 6px;
+  }
+
+  /* SLIDERS */
+  .slider-group { margin-bottom: 14px; }
+  .slider-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .slider-label { font-size: 12px; color: var(--text); opacity: 0.8; }
+  .slider-value {
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    color: var(--accent);
+    min-width: 36px;
+    text-align: right;
+  }
+
+  input[type=range] {
+    width: 100%;
+    height: 4px;
+    background: var(--border);
+    border-radius: 4px;
+    outline: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+  }
+
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    background: var(--accent);
+    border-radius: 50%;
+    box-shadow: 0 0 8px var(--accent);
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+
+  input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.3); }
+
+  /* BUTTONS */
+  .btn {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 1px;
+    padding: 9px 16px;
+    border-radius: 6px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    width: 100%;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+  }
+
+  .btn-primary {
+    background: linear-gradient(135deg, rgba(0,255,213,0.12), rgba(123,92,255,0.10));
+    border: 1px solid rgba(123,92,255,0.18);
+    color: rgba(232,247,255,0.98);
+    box-shadow: 0 10px 30px rgba(123,92,255,0.06);
+  }
+
+  .btn-primary:hover {
+    background: linear-gradient(135deg, rgba(0,255,213,0.18), rgba(123,92,255,0.16));
+    box-shadow: 0 28px 80px rgba(123,92,255,0.12);
+    transform: translateY(-2px);
+  }
+
+  .btn-danger {
+    background: rgba(255,59,59,0.1);
+    border: 1px solid var(--warn);
+    color: var(--warn);
+  }
+
+  .btn-danger:hover {
+    background: rgba(255,59,59,0.2);
+    box-shadow: 0 0 15px rgba(255,59,59,0.3);
+  }
+
+  .btn-orange {
+    background: rgba(255,107,53,0.1);
+    border: 1px solid var(--accent3);
+    color: var(--accent3);
+  }
+
+  .btn-orange:hover {
+    background: rgba(255,107,53,0.2);
+    box-shadow: 0 0 15px rgba(255,107,53,0.3);
+  }
+
+  .btn.active {
+    background: linear-gradient(135deg, rgba(0,255,127,0.4), rgba(0,196,255,0.4));
+    box-shadow: var(--glow);
+  }
+
+  /* TOGGLE ROW */
+  .toggle-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+
+  .toggle-label { font-size: 12px; color: var(--text); opacity: 0.8; }
+
+  .toggle {
+    width: 36px; height: 18px;
+    background: var(--border);
+    border-radius: 20px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.3s;
+  }
+
+  .toggle.on { background: var(--accent); }
+  .toggle::after {
+    content: '';
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 14px; height: 14px;
+    background: white;
+    border-radius: 50%;
+    transition: transform 0.3s;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+  }
+
+  .toggle.on::after { transform: translateX(18px); }
+
+  /* CENTER — MAIN VIEW */
+  .center-panel {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .view-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    background: rgba(0,0,0,0.3);
+    padding: 0 16px;
+  }
+
+  .tab {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    padding: 12px 18px;
+    cursor: pointer;
+    color: var(--muted);
+    border-bottom: 2px solid transparent;
+    transition: all 0.2s;
+  }
+
+  .tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  .tab:hover { color: var(--text); }
+
+  #plot-container {
+    flex: 1;
+    position: relative;
+    min-height: 0;
+  }
+
+  #main-plot {
+    width: 100%;
+    height: 100%;
+  }
+
+  /* ANALYSIS OVERLAY */
+  .analysis-panel {
+    display: none;
+    flex-direction: column;
+    gap: 16px;
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  .analysis-panel.active { display: flex; }
+
+  .analysis-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .chart-card {
+    background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.006));
+    border: 1px solid rgba(255,210,0,0.05);
+    border-radius: 10px;
+    padding: 14px;
+  }
+
+  .chart-card-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  /* RIGHT PANEL */
+  .right-panel {
+    background: var(--panel);
+    border-left: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .right-panel::-webkit-scrollbar { width: 4px; }
+  .right-panel::-webkit-scrollbar-track { background: transparent; }
+  .right-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  /* METRIC CARDS */
+  .metric-card {
+    background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0.005));
+    border: 1px solid rgba(255,210,0,0.05);
+    border-radius: 10px;
+    padding: 14px;
+    transition: border-color 0.3s;
+  }
+
+  .metric-card:hover { border-color: var(--accent); }
+
+  .metric-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .metric-value {
+    font-family: 'Orbitron', monospace;
+    font-size: 24px;
+    font-weight: 900;
+    line-height: 1;
+  }
+
+  .metric-value.green { color: var(--accent); text-shadow: 0 0 20px rgba(0,255,127,0.4); }
+  .metric-value.blue { color: var(--accent2); text-shadow: 0 0 20px rgba(0,196,255,0.4); }
+  .metric-value.orange { color: var(--accent3); text-shadow: 0 0 20px rgba(255,107,53,0.4); }
+  .metric-value.red { color: var(--warn); text-shadow: 0 0 20px rgba(255,59,59,0.4); }
+
+  .metric-sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  .metric-bar {
+    height: 3px;
+    background: var(--border);
+    border-radius: 3px;
+    margin-top: 8px;
+    overflow: hidden;
+  }
+
+  .metric-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.8s ease;
+  }
+
+  /* ECO SCORE */
+  .eco-ring {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px;
+  }
+
+  #eco-canvas {
+    margin-bottom: 8px;
+  }
+
+  .eco-label {
+    font-family: 'Orbitron', monospace;
+    font-size: 13px;
+    letter-spacing: 2px;
+    color: var(--accent);
+  }
+
+  /* AI ALERTS */
+  .alert {
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 12px;
+    line-height: 1.5;
+    border-left: 3px solid;
+    animation: slideIn 0.4s ease;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateX(10px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .alert-warn {
+    background: rgba(255,107,53,0.08);
+    border-color: var(--accent3);
+    color: #ffb899;
+  }
+
+  .alert-danger {
+    background: rgba(255,59,59,0.08);
+    border-color: var(--warn);
+    color: #ffaaaa;
+  }
+
+  .alert-ok {
+    background: rgba(0,255,127,0.08);
+    border-color: var(--accent);
+    color: #99ffd6;
+  }
+
+  .alert-info {
+    background: rgba(0,196,255,0.08);
+    border-color: var(--accent2);
+    color: #99e6ff;
+  }
+
+  .alert-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    margin-bottom: 3px;
+    opacity: 0.7;
+  }
+
+  /* PHASE PROGRESS */
+  .phase-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 0;
+  }
+
+  .phase-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .phase-dot.done { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .phase-dot.active { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); animation: pulse 1.5s infinite; }
+  .phase-dot.pending { background: var(--border); }
+
+  .phase-text { font-size: 12px; }
+  .phase-text span { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--muted); }
+
+  /* ROBOT STATUS */
+  .robot-status {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .robot-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    padding: 4px 0;
+  }
+
+  .robot-key { color: var(--muted); font-family: 'Space Mono', monospace; font-size: 10px; }
+  .robot-val { color: var(--text); }
+
+  /* SEASON INDICATOR */
+  .season-bar {
+    display: flex;
+    gap: 4px;
+    margin-top: 6px;
+  }
+
+  .season-seg {
+    flex: 1;
+    height: 6px;
+    border-radius: 3px;
+    opacity: 0.3;
+    transition: opacity 0.3s;
+  }
+
+  .season-seg.active { opacity: 1; }
+
+  /* BEFORE/AFTER TOGGLE */
+  .compare-toggle {
+    display: flex;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .compare-btn {
+    flex: 1;
+    padding: 7px;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border: none;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .compare-btn.active {
+    background: rgba(0,255,127,0.15);
+    color: var(--accent);
+  }
+
+  /* TOOLTIP */
+  .tooltip-overlay {
+    position: absolute;
+    background: rgba(6,10,15,0.95);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 12px;
+    pointer-events: none;
+    z-index: 100;
+    display: none;
+  }
+
+  /* STATUS BAR */
+  .status-bar {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    background: rgba(6,10,15,0.9);
+    border-top: 1px solid var(--border);
+    padding: 5px 16px;
+    display: flex;
+    gap: 24px;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--muted);
+    z-index: 10;
+  }
+
+  .status-item { display: flex; gap: 6px; align-items: center; }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .status-dot.blue { background: var(--accent2); }
+  .status-dot.orange { background: var(--accent3); }
+
+  /* SCROLLBAR GLOBAL */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+  /* LOADING */
+  .loading-overlay {
+    position: absolute;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    transition: opacity 0.5s;
+  }
+
+  .loading-logo {
+    font-family: 'Orbitron', monospace;
+    font-size: 34px;
+    font-weight: 900;
+    background: linear-gradient(90deg, rgba(123,92,255,0.9), rgba(0,255,213,0.95));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 20px;
+    letter-spacing: 3px;
+    text-transform: lowercase;
+  }
+
+  .loading-bar-container {
+    width: 300px;
+    height: 3px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .loading-bar {
+    height: 100%;
+    width: 0%;
+    background: linear-gradient(90deg, rgba(0,255,213,0.95), rgba(123,92,255,0.9));
+    border-radius: 3px;
+    transition: width 0.1s;
+  }
+  .loading-bar { box-shadow: 0 8px 40px rgba(123,92,255,0.06); }
+
+  .loading-text {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 12px;
+    letter-spacing: 2px;
+  }
+  .loading-bar { background: linear-gradient(90deg, var(--accent), var(--accent2)); box-shadow: 0 6px 18px rgba(255,122,24,0.08); }
+
+  /* SIMULATION running indicator */
+  .sim-running {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: var(--accent2);
+    padding: 6px 12px;
+    background: linear-gradient(90deg, rgba(255,210,0,0.08), rgba(255,122,24,0.04));
+    border-radius: 22px;
+    border: 1px solid rgba(255,210,0,0.12);
+  }
+</style>
+</head>
+<body>
+
+<!-- LOADING SCREEN -->
+<div class="loading-overlay" id="loader">
+  <div class="loading-logo">AGROGEN.AI</div>
+  <div style="font-family:'Space Mono',monospace;font-size:11px;color:var(--muted);letter-spacing:3px;margin-bottom:32px">AI DIGITAL TWIN SIMULATOR</div>
+  <div class="loading-bar-container">
+    <div class="loading-bar" id="loading-bar"></div>
+  </div>
+  <div class="loading-text" id="loading-text">INITIALIZING TERRAIN ENGINE...</div>
+</div>
+</div>
+
+<!-- Onboarding quick tips (dismissible) -->
+<div class="onboard" id="onboard" role="dialog" aria-label="Welcome to agrogen.ai">
+  <h3>Welcome to agrogen.ai</h3>
+  <p>Press <span class="kbd">Space</span> to play/pause · <span class="kbd">←</span>/<span class="kbd">→</span> to step days · <span class="kbd">H</span> to toggle hotspots.</p>
+  <div style="height:10px"></div>
+  <div style="display:flex;gap:8px"><button class="btn btn-primary" onclick="document.getElementById('onboard').style.display='none'">Got it</button><button class="btn" onclick="document.getElementById('onboard').style.display='none'">Dismiss</button></div>
+</div>
+
+<!-- HEADER -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">🌱</div>
+    <div>
+      <div class="logo-text">agrogen.ai</div>
+      <div class="logo-sub">AI Digital Twin</div>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <div id="sim-status" style="display:none" class="sim-running">
+      <span style="width:6px;height:6px;background:var(--accent);border-radius:50%;animation:pulse 1s infinite;display:inline-block"></span>
+      SIMULATION RUNNING
+    </div>
+    <div id="day-display" style="font-family:'Orbitron',monospace;font-size:14px;color:var(--accent2)">DAY 1</div>
+  </div>
+  <div class="header-badges">
+    <div class="badge badge-live">LIVE</div>
+    <div class="badge badge-ai">AI POWERED</div>
+    <div id="quick-summary" style="font-family:'Space Mono',monospace;font-size:10px;color:var(--muted)">20°C · 72% RH</div>
+    <div id="live-ticker" class="live-ticker" aria-live="polite"><span class="live-dot pulse"></span><span id="live-text">Live telemetry</span></div>
+  </div>
+  <div style="display:flex;gap:10px;align-items:center">
+    <select id="preset-select" aria-label="Quick scenarios" style="font-family:Space Mono,monospace;background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px;border-radius:8px">
+      <option value="default">Quick Preset</option>
+      <option value="optimize">Optimize Yield</option>
+      <option value="conserve">Water Conservation</option>
+      <option value="combat">Pest Response</option>
+    </select>
+    <button id="share-btn" class="btn" aria-label="Share scenario">🔗 Share</button>
+    <button id="theme-btn" class="btn" aria-pressed="false" aria-label="Toggle theme">🌗</button>
+  </div>
+</header>
+
+<!-- MAIN LAYOUT -->
+<div class="main-layout">
+
+  <!-- LEFT SIDEBAR -->
+  <div class="sidebar">
+
+    <div class="control-card">
+      <div class="control-card-title">⏱ SIMULATION TIME</div>
+      <div class="slider-group">
+        <div class="slider-header">
+          <span class="slider-label">Growth Day</span>
+          <span class="slider-value" id="day-val">1</span>
+        </div>
+        <input type="range" min="1" max="90" value="1" id="day-slider">
+      </div>
+      <div style="display:flex;gap:6px;margin-top:4px">
+        <button class="btn btn-primary" id="play-btn" onclick="togglePlay()">▶ AUTO PLAY</button>
+      </div>
+      <div style="margin-top:8px">
+        <div class="section-label">SEASON</div>
+        <div class="season-bar">
+          <div class="season-seg active" id="s-spring" style="background:#7fff7f"></div>
+          <div class="season-seg" id="s-summer" style="background:#ffdd44"></div>
+          <div class="season-seg" id="s-autumn" style="background:#ff9944"></div>
+          <div class="season-seg" id="s-winter" style="background:#88ccff"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:9px;color:var(--muted);font-family:'Space Mono',monospace;margin-top:3px">
+          <span>SPR</span><span>SUM</span><span>AUT</span><span>WIN</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="control-card">
+      <div class="control-card-title">🌤 ENVIRONMENT</div>
+      <div class="slider-group">
+        <div class="slider-header">
+          <span class="slider-label">Temperature (°C)</span>
+          <span class="slider-value" id="temp-val">22</span>
+        </div>
+        <input type="range" min="5" max="45" value="22" id="temp-slider">
+      </div>
+      <div class="slider-group">
+        <div class="slider-header">
+          <span class="slider-label">Rainfall (mm)</span>
+          <span class="slider-value" id="rain-val">45</span>
+        </div>
+        <input type="range" min="0" max="200" value="45" id="rain-slider">
+      </div>
+      <div class="slider-group">
+        <div class="slider-header">
+          <span class="slider-label">Sunlight (hrs)</span>
+          <span class="slider-value" id="sun-val">8</span>
+        </div>
+        <input type="range" min="2" max="14" value="8" id="sun-slider">
+      </div>
+      <div class="slider-group">
+        <div class="slider-header">
+          <span class="slider-label">Wind Speed (km/h)</span>
+          <span class="slider-value" id="wind-val">12</span>
+        </div>
+        <input type="range" min="0" max="60" value="12" id="wind-slider">
+      </div>
+    </div>
+
+    <div class="control-card">
+      <div class="control-card-title">🤖 ROBOT CONFIG</div>
+      <div class="slider-group">
+        <div class="slider-header">
+          <span class="slider-label">Start X</span>
+          <span class="slider-value" id="sx-val">0</span>
+        </div>
+        <input type="range" min="0" max="19" value="0" id="sx-slider">
+      </div>
+      <div class="slider-group">
+        <div class="slider-header">
+          <span class="slider-label">Start Y</span>
+          <span class="slider-value" id="sy-val">0</span>
+        </div>
+        <input type="range" min="0" max="19" value="0" id="sy-slider">
+      </div>
+      <div class="slider-group">
+        <div class="slider-header">
+          <span class="slider-label">Goal X</span>
+          <span class="slider-value" id="gx-val">19</span>
+        </div>
+        <input type="range" min="0" max="19" value="19" id="gx-slider">
+      </div>
+      <div class="slider-group">
+        <div class="slider-header">
+          <span class="slider-label">Goal Y</span>
+          <span class="slider-value" id="gy-val">19</span>
+        </div>
+        <input type="range" min="0" max="19" value="19" id="gy-slider">
+      </div>
+    </div>
+
+    <div class="control-card">
+      <div class="control-card-title">👁 OVERLAYS</div>
+      <div class="toggle-row">
+        <span class="toggle-label">Show Weeds</span>
+        <div class="toggle on" id="t-weeds" onclick="toggleLayer(this,'weeds')"></div>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">Show A* Path</span>
+        <div class="toggle on" id="t-path" onclick="toggleLayer(this,'path')"></div>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">Show Crops</span>
+        <div class="toggle on" id="t-crops" onclick="toggleLayer(this,'crops')"></div>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">Show Heatmap</span>
+        <div class="toggle" id="t-heat" onclick="toggleLayer(this,'heat')"></div>
+      </div>
+      <div class="toggle-row">
+        <span class="toggle-label">Robot Position</span>
+        <div class="toggle on" id="t-robot" onclick="toggleLayer(this,'robot')"></div>
+      </div>
+      <div style="margin-top:12px">
+        <div class="compare-toggle">
+          <button class="compare-btn active" id="btn-after" onclick="setMode('after')">CURRENT</button>
+          <button class="compare-btn" id="btn-before" onclick="setMode('before')">DAY 1</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="control-card">
+      <div class="control-card-title">⚡ ACTIONS</div>
+      <button class="btn btn-primary" onclick="regenTerrain()">↺ REGEN TERRAIN</button>
+      <button class="btn btn-danger" onclick="triggerPest()">🐛 SIMULATE PEST EVENT</button>
+      <button class="btn btn-orange" onclick="triggerDrought()">🔥 DROUGHT SCENARIO</button>
+      <button class="btn btn-primary" onclick="optimizeRoute()">🧠 AI OPTIMIZE PATH</button>
+    </div>
+
+  </div>
+
+  <!-- CENTER -->
+  <div class="center-panel">
+    <div class="view-tabs">
+      <div class="tab active" onclick="switchTab('3d',this)">3D FIELD VIEW</div>
+      <div class="tab" onclick="switchTab('analysis',this)">ANALYTICS</div>
+      <div class="tab" onclick="switchTab('heatmap',this)">FIELD HEATMAP</div>
+    </div>
+
+    <div id="plot-container" style="flex:1;position:relative;min-height:0">
+      <div id="main-plot" style="width:100%;height:100%"></div>
+
+      <div class="status-bar">
+        <div class="status-item"><div class="status-dot"></div>TERRAIN ACTIVE</div>
+        <div class="status-item"><div class="status-dot blue"></div>PATH <span id="path-length-bar">0</span> NODES</div>
+        <div class="status-item"><div class="status-dot orange"></div>WEEDS <span id="weed-count-bar">0</span> CELLS</div>
+        <div class="status-item" style="margin-left:auto;color:var(--accent2)">
+          GRID 20×20 · 400 CELLS
+        </div>
+      </div>
+    </div>
+
+    <!-- ANALYTICS TAB -->
+    <div class="analysis-panel" id="analysis-panel">
+      <div class="analysis-grid">
+        <div class="chart-card">
+          <div class="chart-card-title">Growth Curve (All Days)</div>
+          <div id="growth-chart" style="height:180px"></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-card-title">Weed Spread Probability</div>
+          <div id="weed-chart" style="height:180px"></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-card-title">EcoScore Over Time</div>
+          <div id="eco-chart" style="height:180px"></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-card-title">Environmental Impact</div>
+          <div id="env-chart" style="height:180px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- HEATMAP TAB -->
+    <div class="analysis-panel" id="heatmap-panel">
+      <div class="chart-card" style="flex:1">
+        <div class="chart-card-title">Field Health Heatmap (2D)</div>
+        <div id="heatmap-plot" style="height:100%;min-height:400px"></div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel">
+
+    <div>
+      <div class="section-label">PHASE PROGRESS</div>
+      <div class="phase-row">
+        <div class="phase-dot done"></div>
+        <div class="phase-text">Terrain Engine <span>DONE</span></div>
+      </div>
+      <div class="phase-row">
+        <div class="phase-dot done"></div>
+        <div class="phase-text">Crop Growth <span>DONE</span></div>
+      </div>
+      <div class="phase-row">
+        <div class="phase-dot done"></div>
+        <div class="phase-text">Weed Clusters <span>DONE</span></div>
+      </div>
+      <div class="phase-row">
+        <div class="phase-dot done"></div>
+        <div class="phase-text">A* Navigation <span>DONE</span></div>
+      </div>
+      <div class="phase-row">
+        <div class="phase-dot active"></div>
+        <div class="phase-text">Robot Animation <span>ACTIVE</span></div>
+      </div>
+      <div class="phase-row">
+        <div class="phase-dot active"></div>
+        <div class="phase-text">EcoScore AI <span>ACTIVE</span></div>
+      </div>
+    </div>
+
+    <!-- ECO SCORE -->
+    <div class="metric-card">
+      <div class="metric-label">ECO SCORE</div>
+      <div class="eco-ring">
+        <canvas id="eco-canvas" width="100" height="100"></canvas>
+        <div class="eco-label" id="eco-label">—</div>
+      </div>
+    </div>
+
+    <!-- METRICS -->
+    <div class="metric-card">
+      <div class="metric-label">CROP HEIGHT</div>
+      <div class="metric-value green" id="m-height">0.0<span style="font-size:14px">m</span></div>
+      <div class="metric-bar"><div class="metric-bar-fill" id="bar-height" style="background:var(--accent);width:0%"></div></div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-label">YIELD FORECAST</div>
+      <div class="metric-value blue" id="m-yield">0<span style="font-size:14px">%</span></div>
+      <div class="metric-sub" id="m-yield-sub">Low growth phase</div>
+      <div class="metric-bar"><div class="metric-bar-fill" id="bar-yield" style="background:var(--accent2);width:0%"></div></div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-label">WEED COVERAGE</div>
+      <div class="metric-value orange" id="m-weed">0<span style="font-size:14px">%</span></div>
+      <div class="metric-bar"><div class="metric-bar-fill" id="bar-weed" style="background:var(--accent3);width:0%"></div></div>
+    </div>
+
+    <div class="metric-card">
+      <div class="metric-label">PATH EFFICIENCY</div>
+      <div class="metric-value green" id="m-path">—</div>
+      <div class="metric-sub">A* optimal route</div>
+    </div>
+
+    <!-- ROBOT STATUS -->
+    <div class="control-card">
+      <div class="control-card-title">🤖 ROBOT STATUS</div>
+      <div class="robot-status">
+        <div class="robot-row">
+          <span class="robot-key">BATTERY</span>
+          <span class="robot-val" id="r-battery">100%</span>
+        </div>
+        <div class="robot-row">
+          <span class="robot-key">SPEED</span>
+          <span class="robot-val">0.8 m/s</span>
+        </div>
+        <div class="robot-row">
+          <span class="robot-key">STATUS</span>
+          <span class="robot-val" id="r-status" style="color:var(--accent)">STANDBY</span>
+        </div>
+        <div class="robot-row">
+          <span class="robot-key">LAST ACTION</span>
+          <span class="robot-val" id="r-action">Awaiting command</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI RECOMMENDATION + ALERTS -->
+    <div class="recommend-card" id="recommend-card" aria-live="polite">
+      <div style="font-family:Space Mono,monospace;color:var(--muted);letter-spacing:2px">AI RECOMMENDATION</div>
+      <div id="recommend-text" style="font-family:Orbitron,monospace;color:var(--accent2);margin-top:6px;font-size:13px">Analyzing...</div>
+      <div style="height:8px"></div>
+      <div style="display:flex;gap:8px"><button class="btn btn-primary" id="apply-reco">Apply</button><button class="btn" id="explain-reco">Explain</button></div>
+    </div>
+    <div style="height:8px"></div>
+    <div>
+      <div class="section-label">AI ALERTS</div>
+      <div id="alert-list" style="display:flex;flex-direction:column;gap:8px"></div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+// ===================== SIMULATION CORE =====================
+const GRID = 20;
+let terrain = [];
+let weeds = [];
+let path = [];
+let robotStep = 0;
+let isPlaying = false;
+let playInterval = null;
+let compareMode = 'after';
+let showLayers = { weeds: true, path: true, crops: true, heat: false, robot: true };
+let eventActive = { pest: false, drought: false };
+let dayHistory = [];
+
+// ===================== TERRAIN =====================
+function generateTerrain(seed = 1) {
+  const t = [];
+  for (let y = 0; y < GRID; y++) {
+    t.push([]);
+    for (let x = 0; x < GRID; x++) {
+      t[y].push(Math.sin(x/4 + seed) + Math.cos(y/5 + seed*0.3) + Math.sin((x+y)/6) * 0.4);
+    }
+  }
+  return t;
+}
+
+// ===================== GROWTH =====================
+function logisticGrowth(day, K = 8, r = 0.15, t0 = 30) {
+  return K / (1 + Math.exp(-r * (day - t0)));
+}
+
+function getCropHeights(day) {
+  const base = logisticGrowth(day);
+  const h = [];
+  for (let y = 0; y < GRID; y++) {
+    h.push([]);
+    for (let x = 0; x < GRID; x++) {
+      const noise = 0.8 + Math.random() * 0.4;
+      let val = base * noise;
+      if (eventActive.drought) val *= 0.4;
+      h[y].push(val);
+    }
+  }
+  return h;
+}
+
+// ===================== WEEDS =====================
+function generateWeeds(centers = [[5,5],[15,10],[9,17]], radius = 3) {
+  const g = Array.from({length: GRID}, () => Array(GRID).fill(0));
+  for (const [cx, cy] of centers) {
+    for (let i = 0; i < GRID; i++) {
+      for (let j = 0; j < GRID; j++) {
+        const dist = Math.sqrt((i-cx)**2 + (j-cy)**2);
+        if (dist < radius) {
+          g[i][j] = 1;
+          if (eventActive.pest && dist < radius * 1.5) g[i][j] = 1;
+        }
+      }
+    }
+  }
+  return g;
+}
+
+// ===================== A* =====================
+function heuristic(a, b) { return Math.abs(a[0]-b[0]) + Math.abs(a[1]-b[1]); }
+
+function aStar(start, goal) {
+  const key = (p) => p[0]+','+p[1];
+  const openSet = [[0, start]];
+  const cameFrom = {};
+  const gScore = { [key(start)]: 0 };
+
+  while (openSet.length) {
+    openSet.sort((a,b) => a[0]-b[0]);
+    const [, current] = openSet.shift();
+
+    if (current[0] === goal[0] && current[1] === goal[1]) {
+      const path = [];
+      let cur = current;
+      while (key(cur) in cameFrom) {
+        path.push(cur);
+        cur = cameFrom[key(cur)];
+      }
+      path.push(start);
+      return path.reverse();
+    }
+
+    const neighbors = [[1,0],[-1,0],[0,1],[0,-1]].map(d => [current[0]+d[0], current[1]+d[1]]);
+    for (const nb of neighbors) {
+      if (nb[0] < 0 || nb[0] >= GRID || nb[1] < 0 || nb[1] >= GRID) continue;
+      // Cost increases if crossing weed
+      const weedCost = weeds[nb[0]] && weeds[nb[0]][nb[1]] ? 3 : 1;
+      const tentG = (gScore[key(current)] || 0) + weedCost;
+      if (!(key(nb) in gScore) || tentG < gScore[key(nb)]) {
+        cameFrom[key(nb)] = current;
+        gScore[key(nb)] = tentG;
+        openSet.push([tentG + heuristic(nb, goal), nb]);
+      }
+    }
+  }
+  return [];
+}
+
+// ===================== RENDERING =====================
+function renderScene() {
+  const css = getComputedStyle(document.documentElement);
+  const cAccent = (css.getPropertyValue('--accent') || '#00ffd5').trim();
+  const cAccent2 = (css.getPropertyValue('--accent2') || '#7b5cff').trim();
+  const cAccent3 = (css.getPropertyValue('--accent3') || '#48ffe2').trim();
+  const cWarn = (css.getPropertyValue('--warn') || '#ff6b9a').trim();
+  const day = parseInt(document.getElementById('day-slider').value);
+  const heights = getCropHeights(day);
+  const sx = parseInt(document.getElementById('sx-slider').value);
+  const sy = parseInt(document.getElementById('sy-slider').value);
+  const gx = parseInt(document.getElementById('gx-slider').value);
+  const gy = parseInt(document.getElementById('gy-slider').value);
+  path = aStar([sx, sy], [gx, gy]);
+
+  const traces = [];
+
+  // TERRAIN
+  const tx = [], ty = [], tz = [];
+  for (let y = 0; y < GRID; y++) { tx.push([]); ty.push([]); tz.push([]); }
+  for (let y = 0; y < GRID; y++) for (let x = 0; x < GRID; x++) {
+    tx[y].push(x); ty[y].push(y); tz[y].push(terrain[y][x]);
+  }
+
+  traces.push({ type:'surface', x:tx, y:ty, z:tz,
+    colorscale: compareMode === 'before' ? 'Greys' : 'Earth',
+    showscale:false, opacity:0.85, name:'Terrain',
+    lighting:{ambient:0.8, diffuse:0.5}
+  });
+
+  // CROPS
+  if (showLayers.crops && compareMode !== 'before') {
+    const cx = [], cy = [], cz = [];
+    for (let y = 0; y < GRID; y++) { cx.push([]); cy.push([]); cz.push([]); }
+    for (let y = 0; y < GRID; y++) for (let x = 0; x < GRID; x++) {
+      cx[y].push(x); cy[y].push(y); cz[y].push(terrain[y][x] + heights[y][x]);
+    }
+    traces.push({ type:'surface', x:cx, y:cy, z:cz,
+      colorscale: eventActive.drought ? 'YlOrBr' : 'Greens',
+      showscale:false, opacity:0.7, name:'Crops'
+    });
+  }
+
+  // WEEDS
+  if (showLayers.weeds) {
+    const wx=[], wy=[], wz=[];
+    let wcount = 0;
+    for (let i = 0; i < GRID; i++) for (let j = 0; j < GRID; j++) {
+      if (weeds[i][j]) { wx.push(i); wy.push(j); wz.push(terrain[i][j]+1.5); wcount++; }
+    }
+    if (wx.length) traces.push({
+      type:'scatter3d', x:wx, y:wy, z:wz, mode:'markers',
+      marker:{size: eventActive.pest ? 7 : 5, color:cWarn, opacity:0.95,
+        symbol:'diamond', line:{color:cWarn,width:1}},
+      name:'Weeds'
+    });
+    document.getElementById('weed-count-bar').textContent = wcount;
+  }
+
+  // HEATMAP overlay (soil moisture proxy)
+  if (showLayers.heat) {
+    const hx=[], hy=[], hz=[], hc=[];
+    for (let i = 0; i < GRID; i++) for (let j = 0; j < GRID; j++) {
+      hx.push(i); hy.push(j); hz.push(terrain[i][j]+0.1);
+      hc.push(Math.sin(i/3)*Math.cos(j/3)*0.5+0.5);
+    }
+    traces.push({
+      type:'scatter3d', x:hx, y:hy, z:hz, mode:'markers',
+      marker:{size:6, color:hc, colorscale:'RdYlGn', opacity:0.3, showscale:false},
+      name:'Soil Health'
+    });
+  }
+
+  // A* PATH
+  if (showLayers.path && path.length > 0) {
+    const px = path.map(p=>p[0]), py = path.map(p=>p[1]);
+    const pz = path.map(p=>terrain[p[0]][p[1]]+2.5);
+    traces.push({
+      type:'scatter3d', x:px, y:py, z:pz, mode:'lines+markers',
+      line:{color:cAccent2,width:6},
+      marker:{size:3, color:cAccent2},
+      name:'A* Path'
+    });
+    document.getElementById('path-length-bar').textContent = path.length;
+    document.getElementById('m-path').textContent = path.length + ' steps';
+  }
+
+  // ROBOT
+  if (showLayers.robot && path.length > 0) {
+    const rp = path[Math.min(robotStep, path.length-1)];
+    traces.push({
+      type:'scatter3d', x:[rp[0]], y:[rp[1]], z:[terrain[rp[0]][rp[1]]+3.5],
+      mode:'markers',
+      marker:{size:12, color:cAccent, symbol:'circle',
+        line:{color:'#ffffff',width:2}},
+      name:'Robot'
+    });
+    // Robot glow ring
+    traces.push({
+      type:'scatter3d', x:[rp[0]], y:[rp[1]], z:[terrain[rp[0]][rp[1]]+2.8],
+      mode:'markers',
+      marker:{size:20, color:'rgba(123,92,255,0.16)', symbol:'circle'},
+      name:'Robot Ring', showlegend:false
+    });
+  }
+
+  // Start/Goal markers
+  traces.push({
+    type:'scatter3d', x:[sx,gx], y:[sy,gy],
+    z:[terrain[sx][sy]+4, terrain[gx][gy]+4],
+    mode:'markers+text',
+    text:['START','GOAL'],
+    textposition:'top center',
+    textfont:{color:'white',size:10,family:'Space Mono'},
+    marker:{size:10, color:[cAccent, cAccent3], symbol:['square','square']},
+    name:'Waypoints'
+  });
+
+  const layout = {
+    margin:{l:0,r:0,t:0,b:0},
+    paper_bgcolor:'transparent',
+    plot_bgcolor:'transparent',
+    scene:{
+      xaxis:{title:'X', gridcolor:'#1a2535', showbackground:false, color:'#4a6070'},
+      yaxis:{title:'Y', gridcolor:'#1a2535', showbackground:false, color:'#4a6070'},
+      zaxis:{title:'Z', gridcolor:'#1a2535', showbackground:false, color:'#4a6070'},
+      bgcolor:'rgba(6,10,15,0)',
+      camera:{eye:{x:1.5,y:1.5,z:1.2}}
+    },
+    showlegend:false,
+    font:{family:'Space Mono',color:'#4a6070',size:10}
+  };
+
+  Plotly.react('main-plot', traces, layout, {
+    displayModeBar: false, responsive: true, scrollZoom: true
+  });
+
+  updateMetrics(day, heights);
+  updateAlerts(day);
+}
+
+// ===================== METRICS =====================
+function updateMetrics(day, heights) {
+  const avgHeight = heights.flat().reduce((a,b)=>a+b,0) / (GRID*GRID);
+  const maxH = 8;
+  const yieldPct = Math.round((avgHeight / maxH) * 100);
+  const weedCells = weeds.flat().filter(v=>v).length;
+  const weedPct = Math.round((weedCells / (GRID*GRID)) * 100);
+
+  document.getElementById('m-height').innerHTML = avgHeight.toFixed(1)+'<span style="font-size:14px">m</span>';
+  document.getElementById('m-yield').innerHTML = yieldPct+'<span style="font-size:14px">%</span>';
+  document.getElementById('m-weed').innerHTML = weedPct+'<span style="font-size:14px">%</span>';
+  document.getElementById('bar-height').style.width = (avgHeight/maxH*100)+'%';
+  document.getElementById('bar-yield').style.width = yieldPct+'%';
+  document.getElementById('bar-weed').style.width = Math.min(weedPct*2,100)+'%';
+
+  const yieldLabel = yieldPct < 20 ? 'Low growth phase' : yieldPct < 50 ? 'Moderate growth' : yieldPct < 80 ? 'Peak growth' : 'Maximum yield';
+  document.getElementById('m-yield-sub').textContent = yieldLabel;
+
+  // EcoScore
+  const temp = parseInt(document.getElementById('temp-slider').value);
+  const rain = parseInt(document.getElementById('rain-slider').value);
+  const sun = parseInt(document.getElementById('sun-slider').value);
+  const tempScore = temp >= 15 && temp <= 30 ? 100 : Math.max(0, 100 - Math.abs(temp-22)*4);
+  const rainScore = rain >= 20 && rain <= 100 ? 100 : Math.max(0, 100 - Math.abs(rain-50)*0.8);
+  const weedScore = Math.max(0, 100 - weedPct*3);
+  const pathScore = path.length > 0 ? Math.min(100, (GRID*2/path.length)*100) : 0;
+  let ecoScore = Math.round((tempScore * 0.25 + rainScore * 0.25 + weedScore * 0.3 + yieldPct * 0.2));
+  if (eventActive.drought) ecoScore = Math.round(ecoScore * 0.5);
+  if (eventActive.pest) ecoScore = Math.round(ecoScore * 0.7);
+  ecoScore = Math.min(100, Math.max(0, ecoScore));
+
+  drawEcoRing(ecoScore);
+  document.getElementById('eco-label').textContent = ecoScore + '/100';
+
+  // Season
+  const seg = day <= 22 ? 'spring' : day <= 45 ? 'summer' : day <= 68 ? 'autumn' : 'winter';
+  ['spring','summer','autumn','winter'].forEach(s => {
+    document.getElementById('s-'+s).classList.toggle('active', s === seg);
+  });
+
+  // Robot battery (decreases with path traversal)
+  const batt = Math.max(20, 100 - robotStep * 2);
+  document.getElementById('r-battery').textContent = batt + '%';
+  document.getElementById('r-status').textContent = isPlaying ? 'NAVIGATING' : (robotStep > 0 ? 'PAUSED' : 'STANDBY');
+  document.getElementById('r-status').style.color = isPlaying ? 'var(--accent2)' : 'var(--accent)';
+}
+
+function drawEcoRing(score) {
+  const css = getComputedStyle(document.documentElement);
+  const cA = (css.getPropertyValue('--accent') || '#00ffd5').trim();
+  const cA3 = (css.getPropertyValue('--accent3') || '#48ffe2').trim();
+  const cW = (css.getPropertyValue('--warn') || '#ff6b9a').trim();
+  const canvas = document.getElementById('eco-canvas');
+  const ctx = canvas.getContext('2d');
+  const cx = 50, cy = 50, r = 36;
+  ctx.clearRect(0,0,100,100);
+
+  // BG ring
+  ctx.beginPath();
+  ctx.arc(cx,cy,r,-Math.PI/2, Math.PI*1.5);
+  ctx.strokeStyle = '#1a2535';
+  ctx.lineWidth = 8;
+  ctx.stroke();
+
+  // Score arc
+  const color = score > 70 ? cA : score > 40 ? cA3 : cW;
+  const end = -Math.PI/2 + (score/100) * Math.PI * 2;
+  ctx.beginPath();
+  ctx.arc(cx,cy,r,-Math.PI/2, end);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 8;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+
+  // Glow
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 12;
+  ctx.stroke();
+
+  // Center score
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = color;
+  ctx.font = 'bold 20px Orbitron, monospace';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(score, cx, cy);
+}
+
+// ===================== AI ALERTS =====================
+function updateAlerts(day) {
+  const container = document.getElementById('alert-list');
+  const temp = parseInt(document.getElementById('temp-slider').value);
+  const rain = parseInt(document.getElementById('rain-slider').value);
+  const weedCells = weeds.flat().filter(v=>v).length;
+  const weedPct = (weedCells / (GRID*GRID)) * 100;
+
+  const alerts = [];
+
+  if (eventActive.drought) alerts.push({ type:'danger', title:'DROUGHT EVENT', msg:'Severe moisture deficit. Yield reduced 60%.' });
+  if (eventActive.pest) alerts.push({ type:'danger', title:'PEST OUTBREAK', msg:'Weed spread accelerated. Dispatch robot to zones.' });
+  if (temp > 35) alerts.push({ type:'warn', title:'HIGH TEMP', msg:`${temp}°C exceeds crop threshold. Growth suppressed.` });
+  if (rain < 15) alerts.push({ type:'warn', title:'LOW RAINFALL', msg:'Irrigation recommended. Soil moisture critical.' });
+  if (weedPct > 15) alerts.push({ type:'warn', title:'WEED ALERT', msg:`${weedPct.toFixed(0)}% coverage detected. Rerouting robot.` });
+  if (day > 60) alerts.push({ type:'ok', title:'HARVEST WINDOW', msg:'Crop maturity >85%. Optimal harvest in 5-7 days.' });
+  if (day > 25 && day < 55 && !eventActive.drought) alerts.push({ type:'ok', title:'GROWTH OPTIMAL', msg:'All conditions within range. Yield on track.' });
+  if (rain > 120) alerts.push({ type:'info', title:'FLOODING RISK', msg:'High rainfall. Monitor field drainage systems.' });
+
+  if (!alerts.length) alerts.push({ type:'info', title:'SYSTEM NOMINAL', msg:'All parameters within acceptable range.' });
+
+  container.innerHTML = alerts.map(a => `
+    <div class="alert alert-${a.type}">
+      <div class="alert-title">${a.title}</div>
+      ${a.msg}
+    </div>
+  `).join('');
+}
+
+// ===================== ANALYTICS CHARTS =====================
+function renderAnalytics() {
+  const css = getComputedStyle(document.documentElement);
+  const cAccent = (css.getPropertyValue('--accent') || '#00ffd5').trim();
+  const cAccent2 = (css.getPropertyValue('--accent2') || '#7b5cff').trim();
+  const cAccent3 = (css.getPropertyValue('--accent3') || '#48ffe2').trim();
+  const cWarn = (css.getPropertyValue('--warn') || '#ff6b9a').trim();
+  // Growth curve
+  const days = Array.from({length:90}, (_,i) => i+1);
+  const growthVals = days.map(d => logisticGrowth(d));
+  const rainSlider = parseInt(document.getElementById('rain-slider').value);
+  const droughtMod = eventActive.drought ? 0.4 : 1;
+
+  Plotly.react('growth-chart', [{
+    x: days, y: growthVals.map(v=>v*droughtMod),
+    type:'scatter', mode:'lines+markers',
+    line:{color:cAccent, width:2},
+    marker:{size:2, color:cAccent},
+    fill:'tozeroy', fillcolor:'rgba(0,255,213,0.05)'
+  }, {
+    x:[parseInt(document.getElementById('day-slider').value)],
+    y:[logisticGrowth(parseInt(document.getElementById('day-slider').value))*droughtMod],
+    type:'scatter', mode:'markers',
+    marker:{size:10, color:cAccent2, symbol:'circle-open', line:{width:3,color:cAccent2}}
+  }], {
+    paper_bgcolor:'transparent', plot_bgcolor:'transparent',
+    margin:{l:30,r:10,t:10,b:30},
+    xaxis:{color:'#4a6070',gridcolor:'#1a2535',title:'Day'},
+    yaxis:{color:'#4a6070',gridcolor:'#1a2535',title:'Height (m)'},
+    font:{family:'Space Mono',size:9,color:'#4a6070'},
+    showlegend:false
+  }, {displayModeBar:false,responsive:true});
+
+  // Weed spread
+  const wDays = days.map(d => {
+    const base = eventActive.pest ? 20 : 12;
+    return base + d*0.3 + Math.sin(d/10)*3;
+  });
+  Plotly.react('weed-chart', [{
+    x:days, y:wDays, type:'scatter', mode:'lines',
+    line:{color:cWarn,width:2},
+    fill:'tozeroy', fillcolor:'rgba(255,107,53,0.05)'
+  }], {
+    paper_bgcolor:'transparent', plot_bgcolor:'transparent',
+    margin:{l:30,r:10,t:10,b:30},
+    xaxis:{color:'#4a6070',gridcolor:'#1a2535'},
+    yaxis:{color:'#4a6070',gridcolor:'#1a2535',title:'Cells'},
+    font:{family:'Space Mono',size:9,color:'#4a6070'}, showlegend:false
+  }, {displayModeBar:false,responsive:true});
+
+  // EcoScore over time
+  const ecoVals = days.map(d => {
+    let e = 60 + Math.sin(d/15)*20 + (d > 30 ? 15 : 0) - (eventActive.drought ? 25 : 0) - (eventActive.pest ? 15 : 0);
+    return Math.min(100, Math.max(0, e));
+  });
+  Plotly.react('eco-chart', [{
+    x:days, y:ecoVals, type:'scatter', mode:'lines',
+    line:{color:cAccent2,width:2},
+    fill:'tozeroy', fillcolor:'rgba(123,92,255,0.05)'
+  }], {
+    paper_bgcolor:'transparent', plot_bgcolor:'transparent',
+    margin:{l:30,r:10,t:10,b:30},
+    xaxis:{color:'#4a6070',gridcolor:'#1a2535'},
+    yaxis:{color:'#4a6070',gridcolor:'#1a2535',range:[0,100]},
+    font:{family:'Space Mono',size:9,color:'#4a6070'}, showlegend:false
+  }, {displayModeBar:false,responsive:true});
+
+  // Env radar-like bar
+  const temp = parseInt(document.getElementById('temp-slider').value);
+  const rain = parseInt(document.getElementById('rain-slider').value);
+  const sun = parseInt(document.getElementById('sun-slider').value);
+  const wind = parseInt(document.getElementById('wind-slider').value);
+  Plotly.react('env-chart', [{
+    type:'bar',
+    x:['Temp','Rain','Sun','Wind'],
+    y:[Math.min(100,temp*2.2), Math.min(100,rain/2), Math.min(100,sun*7), Math.min(100,wind*1.7)],
+    marker:{color:[cAccent3,cAccent2,cAccent3,'#9f9fff']}
+  }], {
+    paper_bgcolor:'transparent', plot_bgcolor:'transparent',
+    margin:{l:30,r:10,t:10,b:30},
+    xaxis:{color:'#4a6070'},
+    yaxis:{color:'#4a6070',gridcolor:'#1a2535',range:[0,100]},
+    font:{family:'Space Mono',size:9,color:'#4a6070'}, showlegend:false
+  }, {displayModeBar:false,responsive:true});
+}
+
+function renderHeatmap() {
+  const day = parseInt(document.getElementById('day-slider').value);
+  const heights = getCropHeights(day);
+  const z = heights.map((row, yi) => row.map((v, xi) => {
+    const w = weeds[yi] && weeds[yi][xi] ? -2 : 0;
+    return v + w;
+  }));
+  Plotly.react('heatmap-plot', [{
+    type:'heatmap', z:z,
+    colorscale:'RdYlGn', showscale:true,
+    colorbar:{tickfont:{color:'#4a6070',family:'Space Mono',size:9},
+      title:{text:'Health',font:{color:'#4a6070',size:10}}}
+  }, {
+    type:'scatter', x:path.map(p=>p[1]), y:path.map(p=>p[0]),
+    mode:'lines', line:{color:'#ffdd00',width:3}, name:'Robot Path'
+  }], {
+    paper_bgcolor:'transparent', plot_bgcolor:'rgba(12,17,23,1)',
+    margin:{l:40,r:40,t:20,b:40},
+    xaxis:{color:'#4a6070',gridcolor:'#1a2535'},
+    yaxis:{color:'#4a6070',gridcolor:'#1a2535'},
+    font:{family:'Space Mono',size:9,color:'#4a6070'}
+  }, {displayModeBar:false,responsive:true});
+}
+
+// ===================== CONTROLS =====================
+function togglePlay() {
+  isPlaying = !isPlaying;
+  const btn = document.getElementById('play-btn');
+  const simStatus = document.getElementById('sim-status');
+  if (isPlaying) {
+    btn.textContent = '⏸ PAUSE';
+    btn.classList.add('active');
+    simStatus.style.display = 'flex';
+    document.getElementById('r-action').textContent = 'Navigating field';
+    playInterval = setInterval(() => {
+      let day = parseInt(document.getElementById('day-slider').value);
+      if (day >= 90) { day = 1; robotStep = 0; }
+      else day++;
+      document.getElementById('day-slider').value = day;
+      document.getElementById('day-val').textContent = day;
+      document.getElementById('day-display').textContent = 'DAY ' + day;
+      if (path.length > 0) {
+        robotStep = (robotStep + 1) % path.length;
+      }
+      renderScene();
+    }, 300);
+  } else {
+    btn.textContent = '▶ AUTO PLAY';
+    btn.classList.remove('active');
+    simStatus.style.display = 'none';
+    document.getElementById('r-action').textContent = 'Idle';
+    clearInterval(playInterval);
+  }
+}
+
+function toggleLayer(el, layer) {
+  el.classList.toggle('on');
+  showLayers[layer] = el.classList.contains('on');
+  renderScene();
+}
+
+function setMode(mode) {
+  compareMode = mode;
+  document.getElementById('btn-after').classList.toggle('active', mode==='after');
+  document.getElementById('btn-before').classList.toggle('active', mode==='before');
+  renderScene();
+}
+
+function regenTerrain() {
+  terrain = generateTerrain(Math.random() * 10);
+  weeds = generateWeeds();
+  robotStep = 0;
+  document.getElementById('r-action').textContent = 'New terrain loaded';
+  renderScene();
+}
+
+function triggerPest() {
+  eventActive.pest = !eventActive.pest;
+  weeds = generateWeeds([[5,5],[15,10],[9,17],[3,14],[18,4]], eventActive.pest ? 5 : 3);
+  document.getElementById('r-action').textContent = eventActive.pest ? 'ALERT: Pest detected' : 'Pest cleared';
+  renderScene();
+}
+
+function triggerDrought() {
+  eventActive.drought = !eventActive.drought;
+  document.getElementById('r-action').textContent = eventActive.drought ? 'ALERT: Drought active' : 'Drought ended';
+  renderScene();
+}
+
+function optimizeRoute() {
+  robotStep = 0;
+  document.getElementById('r-action').textContent = 'Recalculating optimal path...';
+  setTimeout(() => {
+    renderScene();
+    document.getElementById('r-action').textContent = `Optimal: ${path.length} steps`;
+  }, 300);
+}
+
+function sprayPath(){
+  if (!path || !path.length){ document.getElementById('r-action').textContent = 'No path to spray'; return; }
+  for (const p of path){ const x=p[0], y=p[1]; if (weeds[y] && weeds[y][x]) weeds[y][x]=0; }
+  document.getElementById('r-action').textContent = 'Sprayed along path';
+  renderScene();
+}
+
+function switchTab(tab, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('plot-container').style.display = tab==='3d' ? 'flex' : 'none';
+  document.getElementById('analysis-panel').classList.toggle('active', tab==='analysis');
+  document.getElementById('heatmap-panel').classList.toggle('active', tab==='heatmap');
+
+  if (tab === 'analysis') renderAnalytics();
+  if (tab === 'heatmap') renderHeatmap();
+}
+
+// ===================== SLIDER EVENTS =====================
+function bindSlider(id, valId, cb) {
+  const slider = document.getElementById(id);
+  const val = document.getElementById(valId);
+  slider.addEventListener('input', () => {
+    val.textContent = slider.value;
+    if (cb) cb();
+    renderScene();
+  });
+}
+
+bindSlider('day-slider','day-val', () => {
+  document.getElementById('day-display').textContent = 'DAY ' + document.getElementById('day-slider').value;
+});
+bindSlider('temp-slider','temp-val');
+bindSlider('rain-slider','rain-val');
+bindSlider('sun-slider','sun-val');
+bindSlider('wind-slider','wind-val');
+bindSlider('sx-slider','sx-val'); bindSlider('sy-slider','sy-val');
+bindSlider('gx-slider','gx-val'); bindSlider('gy-slider','gy-val');
+
+// --------------------- UX enhancements (theme, presets, shortcuts) ---------------------
+function toggleTheme(){ const root=document.documentElement; const cur=root.getAttribute('data-theme'); const next = cur==='light' ? 'dark' : 'light'; root.setAttribute('data-theme', next); document.getElementById('theme-btn') && document.getElementById('theme-btn').setAttribute('aria-pressed', next==='light'); }
+document.getElementById('theme-btn') && document.getElementById('theme-btn').addEventListener('click', toggleTheme);
+
+// Quick presets
+document.getElementById('preset-select') && document.getElementById('preset-select').addEventListener('change', (e)=>{
+  const v=e.target.value;
+  if (v==='optimize'){ document.getElementById('temp-slider').value=24; document.getElementById('rain-slider').value=60; document.getElementById('sun-slider').value=10; document.getElementById('wind-slider').value=8; document.getElementById('temp-val').textContent=24; document.getElementById('rain-val').textContent=60; }
+  if (v==='conserve'){ document.getElementById('temp-slider').value=20; document.getElementById('rain-slider').value=25; document.getElementById('sun-slider').value=9; document.getElementById('wind-slider').value=6; document.getElementById('temp-val').textContent=20; document.getElementById('rain-val').textContent=25; }
+  if (v==='combat'){ document.getElementById('temp-slider').value=26; document.getElementById('rain-slider').value=40; document.getElementById('temp-val').textContent=26; document.getElementById('rain-val').textContent=40; triggerPest(); }
+  renderScene();
+});
+
+// Share (graceful fallback)
+document.getElementById('share-btn') && document.getElementById('share-btn').addEventListener('click', async ()=>{
+  const data = {title:'agrogen.ai Scenario', text:'Check my agrogen.ai scenario', url:location.href};
+  try{ if (navigator.share) await navigator.share(data); else { await navigator.clipboard.writeText(location.href); alert('Link copied to clipboard'); } }catch(e){ console.warn(e); }
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (ev)=>{
+  if (ev.target && (ev.target.tagName==='INPUT' || ev.target.tagName==='SELECT' || ev.target.isContentEditable)) return;
+  if (ev.code==='Space'){ ev.preventDefault(); togglePlay(); }
+  if (ev.key==='ArrowRight'){ const s=document.getElementById('day-slider'); s.value = Math.min(90, parseInt(s.value)+1); s.dispatchEvent(new Event('input')); }
+  if (ev.key==='ArrowLeft'){ const s=document.getElementById('day-slider'); s.value = Math.max(1, parseInt(s.value)-1); s.dispatchEvent(new Event('input')); }
+  if (ev.key.toLowerCase()==='h'){ document.getElementById('t-weeds') && document.getElementById('t-weeds').click(); }
+  if (ev.key.toLowerCase()==='s'){ sprayPath && sprayPath(); }
+  if (ev.key.toLowerCase()==='r'){ regenTerrain && regenTerrain(); }
+});
+
+// Lightweight recommendation engine (heuristic)
+function computeRecommendation(){ const ecoText = document.getElementById('eco-label')?.textContent || '50/100'; const eco = parseInt(ecoText)||50; const weed = parseInt(document.getElementById('m-weed')?.textContent)||0; if (eco<45) return 'Reduce temperature slightly and schedule irrigation.'; if (weed>12) return 'Recommend spray path and targeted weeding.'; return 'System stable — consider optimizing robot route to save battery.'; }
+function refreshRecommendation(){ const el=document.getElementById('recommend-text'); if (el) el.textContent = computeRecommendation(); }
+document.getElementById('apply-reco') && document.getElementById('apply-reco').addEventListener('click', ()=>{ const t=document.getElementById('recommend-text').textContent || ''; if (t.includes('spray')) sprayPath(); if (t.includes('irrigation')) { /* simulate irrigation by turning off drought */ if (eventActive.drought) { eventActive.drought=false; renderScene(); } } document.getElementById('r-action').textContent='Applied recommendation'; });
+document.getElementById('explain-reco') && document.getElementById('explain-reco').addEventListener('click', ()=>{ alert('Recommendation based on EcoScore and weed coverage heuristics.'); });
+
+// periodic refresh
+setInterval(refreshRecommendation, 1400);
+
+// optional service worker registration (graceful)
+if ('serviceWorker' in navigator){ navigator.serviceWorker && navigator.serviceWorker.register && navigator.serviceWorker.register('/sw.js').catch(()=>{}); }
+
+// ===================== INIT =====================
+// Live feed simulator: updates quick summary and small live metrics to feel "live"
+function startLiveFeed(){
+  const quick = document.getElementById('quick-summary');
+  const liveText = document.getElementById('live-text');
+  let t = 20, r = 72, batt = 100;
+  setInterval(()=>{
+    // small random walk
+    t += (Math.random()-0.45)*0.6; r += (Math.random()-0.5)*1.2; batt -= Math.random()*0.4;
+    t = Math.max(5, Math.min(45, t)); r = Math.max(0, Math.min(100, r)); batt = Math.max(0, batt);
+    if (quick) { quick.textContent = Math.round(t)+'°C · '+Math.round(r)+'% RH · '+Math.round(batt)+'%'; quick.classList.add('flash'); setTimeout(()=>quick.classList.remove('flash'),600); }
+    if (liveText) liveText.textContent = new Date().toLocaleTimeString();
+    // gently nudge metrics to reflect liveness
+    const hb = document.getElementById('loading-bar'); if (hb) hb.style.width = (10 + Math.random()*80)+'%';
+    // refresh recommendation occasionally
+    if (Math.random() < 0.18) refreshRecommendation();
+  }, 1300);
+}
+startLiveFeed();
+async function init() {
+  const bar = document.getElementById('loading-bar');
+  const text = document.getElementById('loading-text');
+  const steps = [
+    [15, 'LOADING TERRAIN ENGINE...'],
+    [30, 'INITIALIZING GROWTH MODEL...'],
+    [50, 'GENERATING WEED CLUSTERS...'],
+    [65, 'COMPILING A* ALGORITHM...'],
+    [80, 'CALIBRATING AI SENSORS...'],
+    [95, 'LAUNCHING DIGITAL TWIN...'],
+    [100, 'SYSTEM READY']
+  ];
+  for (const [pct, msg] of steps) {
+    bar.style.width = pct + '%';
+    text.textContent = msg;
+    await new Promise(r => setTimeout(r, 200));
+  }
+  await new Promise(r => setTimeout(r, 400));
+  document.getElementById('loader').style.opacity = '0';
+  setTimeout(() => { document.getElementById('loader').style.display = 'none'; }, 500);
+  // Failsafe: if init doesn't complete (JS error), hide loader after 5s to allow UI interaction
+  setTimeout(() => {
+    const l = document.getElementById('loader');
+    if (l && l.style.display !== 'none') { l.style.opacity = '0'; setTimeout(()=>{ l.style.display = 'none'; }, 300); }
+  }, 5000);
+
+  terrain = generateTerrain(1.5);
+  weeds = generateWeeds();
+  renderScene();
+}
+
+init();
+</script>
+</body>
+</html>
